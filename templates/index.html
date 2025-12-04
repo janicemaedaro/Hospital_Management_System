@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Hospital Management System</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+        .card { background-color: white; border-radius: 1rem; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); padding: 1.5rem; }
+        .btn-primary { background-color: #10b981; color: white; transition: background-color 0.3s; }
+        .btn-primary:hover { background-color: #059669; }
+        .btn-secondary { background-color: #6366f1; color: white; }
+        .btn-secondary:hover { background-color: #4f46e5; }
+        .header-bg { background-color: #1f2937; color: white; }
+        .nav-link { 
+            padding: 0.5rem 1rem; 
+            cursor: pointer; 
+            border-bottom: 3px solid transparent; 
+            transition: all 0.2s;
+            font-weight: 500;
+        }
+        .nav-link.active {
+            border-bottom-color: #10b981;
+            font-weight: 700;
+            color: #10b981;
+        }
+        /* Modal Styles */
+        .modal {
+            display: none; 
+            position: fixed; 
+            z-index: 50; 
+            left: 0;
+            top: 0;
+            width: 100%; 
+            height: 100%; 
+            overflow: auto; 
+            background-color: rgba(0,0,0,0.5); 
+        }
+        .modal-content {
+            background-color: #fefefe;
+            margin: 5% auto; 
+            padding: 20px;
+            border: 1px solid #888;
+            width: 90%; 
+            max-width: 800px;
+            border-radius: 1rem;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <header class="header-bg p-4 shadow-lg sticky top-0 z-20">
+        <div class="max-w-7xl mx-auto flex justify-between items-center">
+            <h1 class="text-2xl font-bold text-white">🏥 Hospital Data Structures Demo</h1>
+            <div class="flex items-center space-x-4">
+                <span class="text-sm font-semibold text-gray-300">User Role: {{ role | default('Guest') | capitalize }}</span>
+                <a href="home.html" class="bg-red-500 hover:bg-red-600 text-white text-sm font-semibold py-1 px-3 rounded-lg transition-colors">Logout</a>
+            </div>
+        </div>
+    </header>
+
+    <nav class="bg-white shadow-md z-10 sticky top-[68px]">
+        <div class="flex justify-center space-x-4 p-2 max-w-7xl mx-auto">
+            <a id="nav-triage" class="nav-link text-gray-700" onclick="setPage('triage')">Triage (Queue)</a>
+            <a id="nav-treatment" class="nav-link text-gray-700" onclick="setPage('treatment')">Treatment (Stack)</a>
+            <a id="nav-specializations" class="nav-link text-gray-700" onclick="setPage('specializations')">Doctors (Tree)</a>
+            <a id="nav-records" class="nav-link text-gray-700" onclick="setPage('records')">Patient Records</a>
+        </div>
+    </nav>
+
+    <main class="p-4 md:p-8 space-y-8 max-w-7xl mx-auto">
+        <div id="status-bar" class="card p-3 border-l-4 border-yellow-500 flex items-center justify-between transition-all">
+            <div class="flex items-center space-x-2">
+                <span class="font-semibold">Queue Size:</span>
+                <span id="queue-size" class="font-mono text-lg text-red-600">0 Waiting</span>
+            </div>
+            <div class="text-right">
+                <span id="current-patient" class="text-sm font-medium text-gray-700">No Patient in Treatment</span>
+            </div>
+        </div>
+
+        <div id="page-triage" class="grid grid-cols-1 lg:grid-cols-2 gap-8" style="display: none;">
+            <div class="card h-fit">
+                <h2 class="text-2xl font-bold mb-6 text-gray-800 border-b pb-2">1. Patient Registration (Queue)</h2>
+                <div class="space-y-4">
+                    <input type="text" id="patient-name" placeholder="Patient Name" class="w-full p-3 border border-gray-300 rounded-lg">
+                    <input type="text" id="patient-condition" placeholder="Condition" class="w-full p-3 border border-gray-300 rounded-lg">
+                    <button onclick="handleRegisterPatient()" class="btn-primary w-full p-3 font-bold rounded-lg shadow-md">Register Patient</button>
+                </div>
+            </div>
+            <div class="card">
+                <h2 class="text-2xl font-bold mb-6 text-gray-800 border-b pb-2">Waiting Queue (FIFO)</h2>
+                <div id="patient-queue-table-container" class="overflow-x-auto">
+                    <table class="w-full text-left border-collapse">
+                        <thead><tr class="border-b"><th class="p-2">#</th><th class="p-2">Patient</th><th class="p-2">Condition</th></tr></thead>
+                        <tbody id="patient-queue-list"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <div id="page-treatment" class="grid grid-cols-1 lg:grid-cols-2 gap-8" style="display: none;">
+            <div class="card h-fit">
+                <h2 class="text-2xl font-bold mb-6 text-gray-800 border-b pb-2">2. Treatment Management</h2>
+                <button onclick="handleTreatNext()" class="btn-primary w-full p-4 font-bold rounded-lg shadow-md text-xl mb-6">Treat Next Patient (Dequeue)</button>
+                
+                <div id="current-patient-treatment-info" class="bg-indigo-50 border-l-4 border-indigo-500 p-4 rounded-lg mb-4 hidden">
+                    <h3 class="font-bold text-lg text-indigo-700">Patient: <span id="current-patient-name" class="font-extrabold"></span></h3>
+                    <p class="text-sm text-indigo-600">Condition: <span id="current-patient-condition" class="font-semibold"></span></p>
+                    
+                    <div class="mt-2 flex justify-between items-center">
+                        <p class="text-sm text-indigo-600">Doctor: <span id="current-assigned-doctor" class="font-bold">Unassigned</span></p>
+                        <button onclick="openDoctorSelectionModal()" class="bg-indigo-600 text-white text-xs px-3 py-1 rounded hover:bg-indigo-700">Assign Doctor</button>
+                    </div>
+                    
+                    <div class="flex justify-between mt-2">
+                        <button onclick="handleViewRecord(window.currentTreatmentPatientId)" class="text-xs text-indigo-600 hover:text-indigo-800 font-medium underline">View Full Record</button>
+                        <button onclick="handleDischargePatient()" class="bg-red-500 text-white text-xs px-3 py-1 rounded hover:bg-red-600 font-medium">Discharge Patient</button>
+                    </div>
+                </div>
+                
+                <h3 class="font-bold mb-2 text-gray-700">Add Treatment Step</h3>
+                <div class="flex items-center space-x-4">
+                    <input type="text" id="treatment-detail" placeholder="Enter treatment step" class="flex-grow p-3 border border-gray-300 rounded-lg">
+                    <button onclick="handleAddTreatment()" class="btn-secondary p-3 font-bold rounded-lg shadow-md">Add Step</button>
+                </div>
+                <button onclick="handleUndoTreatment()" class="w-full p-3 font-bold rounded-lg shadow-md text-sm bg-red-100 text-red-600 hover:bg-red-200 transition-colors mt-4">Undo Last Treatment</button>
+            </div>
+            <div class="card">
+                <h2 class="text-2xl font-bold mb-6 text-gray-800 border-b pb-2">Treatment History (Stack)</h2>
+                <ul id="treatment-history" class="bg-gray-50 p-3 rounded-lg text-sm space-y-2"><li class="text-gray-500">Start treatment to see history.</li></ul>
+            </div>
+        </div>
+
+        <div id="page-specializations" class="card" style="display: none;">
+            <h2 class="text-2xl font-bold mb-6 text-gray-800 border-b pb-2">3. Doctor Specialization Hierarchy (Tree)</h2>
+            <div id="specialization-tree" class="text-sm font-mono p-4 bg-gray-100 rounded-lg overflow-x-auto min-h-64 border border-gray-300"></div>
+        </div>
+
+        <div id="page-records" class="card" style="display: none;">
+            <div class="flex items-center justify-between mb-6 border-b pb-2">
+                <h2 class="text-2xl font-bold text-gray-800">4. Patient Record: <span id="record-patient-name" class="text-emerald-600">...</span></h2>
+                <button onclick="setPage('triage')" class="text-sm bg-gray-200 hover:bg-gray-300 px-3 py-1 rounded-lg font-medium text-gray-700">&larr; Back to Triage</button>
+            </div>
+            <div id="patient-record-content" class="space-y-6"></div>
+        </div>
+    </main>
+
+    <div id="doctor-modal" class="modal">
+        <div class="modal-content">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold text-indigo-800">Select a Doctor</h2>
+                <span onclick="closeDoctorSelectionModal()" class="text-gray-500 text-2xl cursor-pointer hover:text-gray-800">&times;</span>
+            </div>
+            <p class="text-gray-600 mb-4 text-sm">Navigate the tree to find a doctor for the current patient.</p>
+            <div id="modal-specialization-tree" class="text-sm font-mono p-4 bg-gray-50 rounded-lg overflow-x-auto max-h-96 border border-gray-200"></div>
+        </div>
+    </div>
+    
+    <div id="toast-container" class="fixed bottom-4 right-4 space-y-2 z-50"></div>
+
+    <script type="module">
+        window.currentTreatmentPatientId = null; 
+        
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            const colors = { success: 'bg-green-500', error: 'bg-red-500', info: 'bg-blue-500' };
+            const toast = document.createElement('div');
+            toast.className = `p-3 rounded-lg text-white font-semibold shadow-xl ${colors[type]} transition-opacity duration-300`;
+            toast.textContent = message;
+            container.appendChild(toast);
+            setTimeout(() => { toast.classList.add('opacity-0'); setTimeout(() => toast.remove(), 300); }, 3000);
+        }
+
+        function setPage(page) {
+            ['triage', 'treatment', 'specializations', 'records'].forEach(p => {
+                document.getElementById(`page-${p}`).style.display = (p === page) ? (p === 'records' ? 'block' : 'grid') : 'none';
+                document.getElementById(`nav-${p}`).classList.toggle('active', p === page);
+            });
+            if(page === 'specializations') renderSpecializationTree('specialization-tree');
+            updateUI();
+        }
+
+        // --- Modal Logic ---
+        window.openDoctorSelectionModal = function() {
+            if (!window.currentTreatmentPatientId) {
+                showToast("Start treating a patient before assigning a doctor.", 'error');
+                return;
+            }
+            document.getElementById('doctor-modal').style.display = 'block';
+            renderSpecializationTree('modal-specialization-tree', true); // true = selection mode
+        }
+        window.closeDoctorSelectionModal = function() {
+            document.getElementById('doctor-modal').style.display = 'none';
+        }
+        window.onclick = function(event) {
+            if (event.target == document.getElementById('doctor-modal')) {
+                closeDoctorSelectionModal();
+            }
+        }
+
+        window.assignDoctor = async function(doctorName) {
+            try {
+                const response = await fetch('/api/assign_doctor', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ doctor_name: doctorName })
+                });
+                const result = await response.json();
+                if (result.status === 'success') {
+                    showToast(result.message, 'success');
+                    closeDoctorSelectionModal();
+                    updateUI();
+                } else {
+                    showToast(result.message, 'error');
+                }
+            } catch (e) {
+                showToast("Assignment failed.", 'error');
+            }
+        }
+
+        // --- Tree Rendering ---
+        async function renderSpecializationTree(containerId, isSelectionMode = false) {
+            const treeEl = document.getElementById(containerId);
+            treeEl.innerHTML = 'Loading...';
+            try {
+                const response = await fetch('/api/specializations');
+                const result = await response.json();
+                
+                function renderNode(node, level=0) {
+                    const padding = level * 1.5;
+                    let icon = level === 0 ? '🏥 ' : (node.children.length > 0 ? '📁 ' : '🩺 ');
+                    let html = `<div style="padding-left: ${padding}rem;" class="py-1 border-l border-gray-300 pl-2">
+                                        ${icon}<span class="text-indigo-600 font-bold">${node.name}</span>`;
+                    
+                    if (node.doctors && node.doctors.length > 0) {
+                        html += `<div class="ml-4 mt-1 space-y-1">`;
+                        // FIX: Iterate over the list of doctor objects {name, description}
+                        node.doctors.forEach(doc => {
+                            // FIX: Access doc.name and doc.description
+                            html += `<div class="text-xs text-gray-700 flex items-center">
+                                         <span class="mr-2">👨‍⚕️ <span class="font-semibold">${doc.name}</span>: ${doc.description}</span>`; 
+                            if (isSelectionMode) {
+                                // FIX: Pass doc.name to the assignDoctor function
+                                html += `<button onclick="assignDoctor('${doc.name}')" class="bg-green-100 text-green-700 border border-green-300 px-2 py-0.5 rounded hover:bg-green-200">Select</button>`;
+                            }
+                            html += `</div>`;
+                        });
+                        html += `</div>`;
+                    }
+                    html += `</div>`;
+                    node.children.forEach(child => html += renderNode(child, level + 1));
+                    return html;
+                }
+                treeEl.innerHTML = renderNode(result.tree_data);
+            } catch (e) { 
+                console.error("Error loading specialization tree:", e); 
+                treeEl.innerHTML = 'Error loading tree structure.'; 
+            }
+        }
+
+        async function updateUI() {
+            try {
+                const response = await fetch('/api/status');
+                if(response.status === 401) return;
+                const status = await response.json();
+
+                const queueList = document.getElementById('patient-queue-list');
+                if (queueList) {
+                    queueList.innerHTML = status.queue_data.length === 0 ? '<tr><td colspan="3" class="text-center text-gray-500 py-4">Empty Queue</td></tr>' : 
+                        status.queue_data.map((p, i) => `
+                            <tr class="hover:bg-gray-50 border-b"><td class="p-2 font-mono text-sm text-gray-500">${i+1}</td>
+                            <td class="p-2 font-medium text-indigo-600 cursor-pointer" onclick="handleViewRecord('${p.id}')">${p.name}</td>
+                            <td class="p-2"><span class="bg-red-100 text-red-600 px-2 py-1 rounded-full text-xs font-bold">${p.condition}</span></td></tr>
+                        `).join('');
+                }
+
+                document.getElementById('queue-size').textContent = `${status.queue_data.length} Waiting`;
+                
+                const currentId = status.current_patient_id;
+                window.currentTreatmentPatientId = currentId;
+                const currentInfoEl = document.getElementById('current-patient-treatment-info');
+                
+                if (currentId) {
+                    document.getElementById('current-patient').innerHTML = `Treating: <span class="text-indigo-600 font-bold">${status.current_patient_name}</span>`;
+                    currentInfoEl.classList.remove('hidden');
+                    document.getElementById('current-patient-name').textContent = status.current_patient_name;
+                    document.getElementById('current-patient-condition').textContent = status.current_patient_condition;
+                    document.getElementById('current-assigned-doctor').textContent = status.assigned_doctor || 'Unassigned';
+                } else {
+                    document.getElementById('current-patient').textContent = 'No Patient in Treatment';
+                    currentInfoEl.classList.add('hidden');
+                }
+
+                const historyList = document.getElementById('treatment-history');
+                if (historyList) {
+                    historyList.innerHTML = status.history_data.length === 0 ? '<li class="text-gray-500">No history.</li>' : 
+                        status.history_data.slice().reverse().map(t => `
+                            <li class="border-l-4 border-indigo-400 pl-3 py-1 bg-white shadow-sm rounded-r-lg">
+                                <span class="font-bold text-gray-700">${t.timestamp.split(' ')[1].substring(0,8)}:</span> ${t.detail}
+                            </li>`).join('');
+                }
+            } catch (e) { console.error("Error updating UI status:", e); }
+        }
+
+        // API Wrappers
+        async function apiCall(url, body) {
+            try {
+                const res = await fetch(url, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body) });
+                const data = await res.json();
+                showToast(data.message, data.status);
+                if(data.status === 'success') updateUI();
+            } catch(e) { showToast("Error connecting to server.", 'error'); }
+        }
+
+        window.handleRegisterPatient = () => {
+            const name = document.getElementById('patient-name').value;
+            const cond = document.getElementById('patient-condition').value;
+            if(name && cond) {
+                apiCall('/api/register', {name, condition: cond}).then(() => {
+                    document.getElementById('patient-name').value = '';
+                    document.getElementById('patient-condition').value = '';
+                });
+            } else showToast("Fill all fields", 'error');
+        };
+        window.handleTreatNext = () => apiCall('/api/treat_next', {});
+        window.handleAddTreatment = () => {
+            const detail = document.getElementById('treatment-detail').value;
+            if(detail) apiCall('/api/add_treatment', {detail}).then(() => document.getElementById('treatment-detail').value = '');
+            else showToast("Enter detail", 'error');
+        };
+        window.handleUndoTreatment = () => apiCall('/api/undo_treatment', {});
+        
+        // NEW HANDLER FOR DISCHARGE
+        window.handleDischargePatient = () => {
+            if (window.currentTreatmentPatientId) {
+                apiCall('/api/discharge', {});
+            } else {
+                showToast("No patient to discharge.", 'info');
+            }
+        };
+
+        window.handleViewRecord = async (id) => {
+            if(!id) return;
+            setPage('records');
+            const content = document.getElementById('patient-record-content');
+            content.innerHTML = '<div class="text-center py-8 text-lg text-gray-500">Loading Record...</div>';
+            try {
+                const res = await fetch(`/api/patient_record/${id}`);
+                const r = await res.json();
+                if (r.status === 'error') {
+                     document.getElementById('record-patient-name').textContent = 'Not Found';
+                     content.innerHTML = `<div class="p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">${r.message}</div>`;
+                     return;
+                }
+                
+                document.getElementById('record-patient-name').textContent = r.name;
+                content.innerHTML = r.full_visits.map((v, i) => `
+                    <div class="p-4 bg-gray-50 border rounded-lg shadow-sm">
+                        <div class="font-bold text-indigo-700">Visit ${r.full_visits.length - i} - ${v.registration_time}</div>
+                        <div>Condition: ${v.condition} | Status: <span class="${v.status === 'In Treatment' ? 'text-yellow-600' : 'text-green-600'} font-semibold">${v.status}</span> | Doctor: ${v.assigned_doctor || 'None'}</div>
+                        <h4 class="font-bold mt-3 text-gray-700 border-b pb-1">Treatment History:</h4>
+                        <ul class="ml-5 mt-2 text-sm text-gray-600 space-y-1">
+                            ${v.treatment_history.map(h => `<li class="border-l-2 border-gray-300 pl-3"><strong>${h.timestamp.split(' ')[1].substring(0,8)}</strong>: ${h.detail}</li>`).join('') || '<li>No treatment steps</li>'}
+                        </ul>
+                    </div>
+                `).join('');
+            } catch(e) { content.innerHTML = '<div class="p-4 bg-red-50 border border-red-200 text-red-700 rounded-lg">Error loading record.</div>'; }
+        };
+
+        // Expose functions and initial setup
+        window.renderSpecializationTree = renderSpecializationTree;
+        window.setPage = setPage;
+
+        window.onload = () => {
+            setPage('triage'); // Load the Triage page first
+        };
+
+    </script>
+</body>
+</html>
